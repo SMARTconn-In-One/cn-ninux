@@ -1,0 +1,14 @@
+install software
+curl http://android.git.kernel.org/repo > ~/bin/repo
+chmod a+x repo
+
+download meego-source
+
+cd
+mkdir meego
+cd meego
+repo init -u git://gitorious.org/repo-for-meego/meego_manifest.git
+...
+repo sync
+
+
