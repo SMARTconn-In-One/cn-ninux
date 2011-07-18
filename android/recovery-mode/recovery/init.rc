@@ -1,0 +1,9 @@
+xxx
+...
+xxx
+
+#recovery mode
+service recovery_sys /system/bin/sh /system/etc/recovery.sh
+    disabled
+    oneshot
+    
