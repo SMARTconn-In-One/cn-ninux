@@ -54,19 +54,6 @@ public class MasterClear extends Activity {
     private View mFinalView;
     private Button mFinalButton;
 
-    /*private static final String REMOVE_DATA_APP = "rm -r /data/app";
-    private static final String REMOVE_DATA_USI_BLUETOOTH_TXT ="rm -r /data/usi-bluetooth.txt";
-    private static final String REMOVE_DATA_SYSTEM = "rm -r /data/system";
-    private static final String REMOVE_DATA_STATUSBSB = "rm -r /data/statususb";
-    private static final String REMOVE_DATA_TOMBSTONES = "rm -r /data/tombstones";
-    private static final String REMOVE_DATA_PROPERTY = "rm -r /data/property";
-    private static final String REMOVE_DATA_BACKUP = "rm -r /data/backup";
-    private static final String REMOVE_DATA_DALVIK_CACHE="rm -r /data/dalvik-cache";
-    private static final String REMOVE_DATA_APP_PRIVATE = "rm -r /data/app-private";
-    private static final String REMOVE_DATA_DATA = "rm -r /data/data/";
-    private static final String REMOVE_DATA_LOCAL = "rm -r /data/local";
-    private static final String REMVOE_DATA_MISC = "rm -r /data/misc";
-    private static final String REMVOE_DATA_DONTPANIC="rm -r /data/dontpanic";*/
     
 
     /**
@@ -81,24 +68,6 @@ public class MasterClear extends Activity {
                 }
 
 		android.os.SystemProperties.set("ctl.start","recovery_sys");
-		
-		try {
-		    /*execCommand(REMOVE_DATA_DATA);
-		    execCommand(REMOVE_DATA_APP);
-		    execCommand(REMOVE_DATA_USI_BLUETOOTH_TXT);
-		    execCommand(REMOVE_DATA_SYSTEM);
-		    execCommand(REMOVE_DATA_STATUSBSB);
-		    execCommand(REMOVE_DATA_TOMBSTONES);
-		    execCommand(REMOVE_DATA_PROPERTY);
-		    execCommand(REMOVE_DATA_BACKUP);
-		    execCommand(REMOVE_DATA_DALVIK_CACHE);
-		    execCommand(REMOVE_DATA_APP_PRIVATE);
-		    execCommand(REMOVE_DATA_LOCAL);
-		    execCommand(REMVOE_DATA_MISC);
-		    execCommand(REMVOE_DATA_DONTPANIC);*/
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
                 sendBroadcast(new Intent("android.intent.action.MASTER_CLEAR"));
                 // Intent handling is asynchronous -- assume it will happen soon.
             }
@@ -209,12 +178,4 @@ public class MasterClear extends Activity {
         establishInitialState();
     }
 
-    /**
-     * @prama: command->input command
-     * @return: null
-     */
-    /*public void execCommand(String command) throws IOException {
-	Runtime runtime = Runtime.getRuntime();
-	runtime.exec(command);
-    }*/
 }
