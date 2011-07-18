@@ -2,3 +2,6 @@
 
 git push origin branch-name:master //commit local branch branch-name as master's child branch
 git push origin branch-name:branch-name //commit loacl branch as new branch
+
+git commit --amend   //git edit the last commit
+git rebase --continue
