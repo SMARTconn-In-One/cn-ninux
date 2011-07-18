@@ -1,7 +1,23 @@
 **** git commad ****
 
+Update branch:
 git push origin branch-name:master //commit local branch branch-name as master's child branch
 git push origin branch-name:branch-name //commit loacl branch as new branch
 
+Edit commit:
 git commit --amend   //git edit the last commit
 git rebase --continue
+
+Global setup:
+git config --global user.name "Your Name"
+git config --global user.email cn.compous@gmail.com
+
+Create Romote Server:
+mkdir cn-ninux
+cd cn-ninux
+git init
+touch README
+git add README
+git commit -m 'first commit'
+git remote add origin git@github.com:cn-ninux/cn-ninux.git
+git push -u origin master
