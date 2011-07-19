@@ -1,0 +1,120 @@
+*******
+
+/* s3c_pm_enter
+ *
+ * central control for sleep/resume process
+ */
+
+static int s3c_pm_enter(suspend_state_t state)
+{
+	static unsigned long regs_save[16];
+
+	/* ensure the debug is initialised (if enabled) */
+
+	s3c_pm_debug_init();
+
+	S3C_PMDBG("%s(%d)\n", __func__, state);
+
+	if (pm_cpu_prep == NULL || pm_cpu_sleep == NULL) {
+		printk(KERN_ERR "%s: error: no cpu sleep function\n", __func__);
+		return -EINVAL;
+	}
+
+	/* check if we have anything to wake-up with... bad things seem
+	 * to happen if you suspend with no wakeup (system will often
+	 * require a full power-cycle)
+	*/
+
+	if (!any_allowed(s3c_irqwake_intmask, s3c_irqwake_intallow) &&
+	    !any_allowed(s3c_irqwake_eintmask, s3c_irqwake_eintallow)) {
+		printk(KERN_ERR "%s: No wake-up sources!\n", __func__);
+		printk(KERN_ERR "%s: Aborting sleep\n", __func__);
+		return -EINVAL;
+	}
+
+	/* store the physical address of the register recovery block */
+
+	s3c_sleep_save_phys = virt_to_phys(regs_save);
+
+	S3C_PMDBG("s3c_sleep_save_phys=0x%08lx\n", s3c_sleep_save_phys);
+
+	/* save all necessary core registers not covered by the drivers */
+
+	s3c_pm_save_gpios();
+	s3c_pm_save_uarts();
+	s3c_pm_save_core();
+
+
+	/* set the irq configuration for wake */
+
+	s3c_pm_configure_extint();
+
+	S3C_PMDBG("sleep: irq wakeup masks: %08lx,%08lx\n",
+	    s3c_irqwake_intmask, s3c_irqwake_eintmask);
+
+	s3c_pm_arch_prepare_irqs();
+
+	/* call cpu specific preparation */
+
+	pm_cpu_prep();
+
+	/* flush cache back to ram */
+
+	flush_cache_all();
+
+	s3c_pm_check_store();
+
+	/* clear wakeup_stat register for next wakeup reason */
+	__raw_writel(__raw_readl(S5P_WAKEUP_STAT), S5P_WAKEUP_STAT);
+
+	/* send the cpu to sleep... */
+
+	s3c_pm_arch_stop_clocks();
+
+	/* s3c_cpu_save will also act as our return point from when
+	 * we resume as it saves its own register state and restores it
+	 * during the resume.  */
+
+	pmstats->sleep_count++;
+	pmstats->sleep_freq = __raw_readl(S5P_CLK_DIV0);
+	s3c_cpu_save(regs_save);
+	pmstats->wake_count++;
+	pmstats->wake_freq = __raw_readl(S5P_CLK_DIV0);
+
+	/* restore the cpu state using the kernel's cpu init code. */
+
+	cpu_init();
+
+	fiq_glue_resume();
+	local_fiq_enable();
+
+	s3c_pm_restore_core();
+	s3c_pm_restore_uarts();
+	s3c_pm_restore_gpios();
+	s5pv210_restore_eint_group();
+
+	s3c_pm_debug_init();
+
+        /* restore the system state */
+
+	if (pm_cpu_restore)
+		pm_cpu_restore();
+
+	/* check what irq (if any) restored the system */
+
+	s3c_pm_arch_show_resume_irqs();
+
+	S3C_PMDBG("%s: post sleep, preparing to return\n", __func__);
+
+	/* LEDs should now be 1110 */
+	s3c_pm_debug_smdkled(1 << 1, 0);
+
+	s3c_pm_check_restore();
+
+	/* ok, let's return from sleep */
+
+	S3C_PMDBG("S3C PM Resume (post-restore)\n");
+	return 0;
+}
+
+********
