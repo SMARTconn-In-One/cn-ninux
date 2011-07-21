@@ -25,3 +25,8 @@ git push -u origin master
 
 Remove commit
 git reset --hard HEAD^
+git reset --soft HEAD^
+
+Prevent merge
+git fetch
+git rebase origin
