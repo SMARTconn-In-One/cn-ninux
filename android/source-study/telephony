@@ -1,0 +1,17 @@
+/*** This document is about android radio interface layer notes***/
+
+/**
+ * @author: huangch
+ */
+
+//Request BASEHAND workflow
+.>define RILConstants.java->RIL_REQUEST_BASEHAND_VERSION =51 -< define as ril.h
+
+.>define RIL.java-> case RIL_REQUSET_BASE_VERSION -< switch(){} event.
+.>define RIL.java-> case RIL_REQUSET_BASE_VERSION -< switch(){} event. return "BASEHAND_VERSION" ==Useage by application.
+
+.>define ril.h -> #define RIL_REQUEST_BASE_VERSION =51 -< define use by libril & libreference-ril &
+
+.>define ril_command.h-> RIL_REQUEST_BASE_VERSION -< libril.so
+.>defnie ril.cpp -> RIL_REQUEST_BASE_VERSION -< libril.so
+
