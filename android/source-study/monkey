@@ -1,0 +1,8 @@
+   
+source path: package/apps/Settings/src/com/android/settings/Utils.java
+    /**
+     * Returns true if Monkey is running.
+     */
+    public static boolean isMonkeyRunning() {
+        return SystemProperties.getBoolean("ro.monkey", false);
+    }
