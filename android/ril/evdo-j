@@ -1,0 +1,28 @@
+@@ -31,6 +31,7 @@ import android.telephony.ServiceState;
+ import android.telephony.SignalStrength;
+ import android.util.Log;
+ 
++import com.android.internal.telephony.CallManager;
+ import com.android.internal.telephony.cdma.CDMAPhone;
+ import com.android.internal.telephony.gsm.GSMPhone;
+ import com.android.internal.telephony.gsm.NetworkInfo;
+@@ -86,6 +87,9 @@ public class PhoneProxy extends Handler implements Phone {
+                 }
+             }
+ 
++            CallManager cMgr = CallManager.getInstance();
++            if(cMgr != null) cMgr.unregisterPhone(mActivePhone);
++
+             if(mOutgoingPhone.equals("GSM")) {
+                 logd("Make a new CDMAPhone and destroy the old GSMPhone.");
+ 
+@@ -132,6 +136,8 @@ public class PhoneProxy extends Handler implements Phone {
+             mPhoneSubInfoProxy.setmPhoneSubInfo(this.mActivePhone.getPhoneSubInfo());
+             mCommandsInterface = ((PhoneBase)mActivePhone).mCM;
+ 
++            if(cMgr != null) cMgr.registerPhone(mActivePhone);
++
+             //Send an Intent to the PhoneApp that we had a radio technology change
+             Intent intent = new Intent(TelephonyIntents.ACTION_RADIO_TECHNOLOGY_CHANGED);
+             intent.addFlags(Intent.FLAG_RECEIVER_REPLACE_PENDING);
+

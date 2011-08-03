@@ -30,3 +30,10 @@ git reset --soft HEAD^
 Prevent merge
 git fetch
 git rebase origin
+
+
+Add file and Add commit
+git add . --add all  or git add filename --add one file
+git commit -m 'commit content'
+
+
