@@ -1,0 +1,420 @@
+-------------
+Init进程
+-------------
+
+Android系统在启动时首先会启动Linux系统，引导加载Linux Kernel并启动init进程。Init进程是一个由内核启动的用户级进程，是Android系统的第一个进程。该进程的相关代码在platform\system\core\init\init.c。在main函数中，有如下代码：
+
+    open_devnull_stdio();
+    log_init();
+    
+    INFO("reading config file\n");
+    init_parse_config_file("/init.rc");
+
+    /* pull the kernel commandline and ramdisk properties file in */
+    import_kernel_cmdline(0);
+
+    get_hardware_name(hardware, &revision);
+    snprintf(tmp, sizeof(tmp), "/init.%s.rc", hardware);
+    init_parse_config_file(tmp);
+
+    这里会加载解析init.rc和init.hardware.rc两个初始化脚本。*.rc文件定义了在init进程中需要启动哪些进程服务和执行哪些动作。其详细说明参见platform\system\core\init\reademe.txt。init.rc见如下定义：
+
+
+service servicemanager /system/bin/servicemanager
+    user system
+    critical
+    onrestart restart zygote
+    onrestart restart media
+
+service vold /system/bin/vold
+    socket vold stream 0660 root mount
+    ioprio be 2
+
+service netd /system/bin/netd
+    socket netd stream 0660 root system
+    socket dnsproxyd stream 0660 root inet
+
+service debuggerd /system/bin/debuggerd
+
+service ril-daemon /system/bin/rild
+    socket rild stream 660 root radio
+    socket rild-debug stream 660 radio system
+    user root
+    group radio cache inet misc audio sdcard_rw
+
+service zygote /system/bin/app_process -Xzygote /system/bin --zygote --start-system-server
+    socket zygote stream 666
+    onrestart write /sys/android_power/request_state wake
+    onrestart write /sys/power/state on
+    onrestart restart media
+    onrestart restart netd
+
+service drm /system/bin/drmserver
+    user drm
+    group system root inet
+
+具体解析过程见platform\system\core\init\Init_parser.c。解析所得服务添加到service_list中，动作添加到action_list中。
+接下来在main函数中执行动作和启动进程服务：
+
+    execute_one_command();
+    restart_processes();
+
+通常init过程需要创建一些系统文件夹并启动USB守护进程、Android Debug Bridge守护进程、Debug守护进程、ServiceManager进程、Zygote进程等。
+
+-------------------
+ServiceManager进程
+-------------------
+ServiceManager进程是所有服务的管理器。由init.rc对ServiceManager的描述service servicemanager /system/bin/servicemanager可知servicemanager进程从platform\frameworks\base\cmd\servicemanager\Service_manager.cpp启动。在main函数中有如下代码：
+
+int main(int argc, char **argv)
+{
+    struct binder_state *bs;
+    void *svcmgr = BINDER_SERVICE_MANAGER;
+
+    bs = binder_open(128*1024);
+
+    if (binder_become_context_manager(bs)) {
+        LOGE("cannot become context manager (%s)\n", strerror(errno));
+        return -1;
+    }
+
+    svcmgr_handle = svcmgr;
+    binder_loop(bs, svcmgr_handler);
+    return 0;
+}
+
+首先调用binder_open()打开Binder设备(/dev/binder)，调用binder_become_context_manager()把当前进程设置为ServiceManager。ServiceManager本身就是一个服务。
+
+int binder_become_context_manager(struct binder_state *bs)
+{
+    return ioctl(bs->fd, BINDER_SET_CONTEXT_MGR, 0);
+}
+    
+最后binder_loop()进入循环状态，并设置svcmgr_handler回调函数等待添加、查询、获取服务等请求。
+
+---------------
+Zygote进程
+---------------
+
+Zygote进程用于产生其他进程。由init.rc对zygote的描述service zygot /system/bin/app_process可知zygote进程从platfrom\frameworks\base\cmds\app_process\App_main.cpp启动。在main函数中有如下代码：
+
+
+        if (0 == strcmp("--zygote", arg)) {
+            bool startSystemServer = (i < argc) ? 
+                    strcmp(argv[i], "--start-system-server") == 0 : false;
+            setArgv0(argv0, "zygote");
+            set_process_name("zygote");
+            runtime.start("com.android.internal.os.ZygoteInit",
+                startSystemServer);
+        } else {
+            set_process_name(argv0);
+
+            runtime.mClassName = arg;
+
+            // Remainder of args get passed to startup class main()
+            runtime.mArgC = argc-i;
+            runtime.mArgV = argv+i;
+
+            LOGV("App process is starting with pid=%d, class=%s.\n",
+                 getpid(), runtime.getClassName());
+            runtime.start();
+        }
+
+首先创建AppRuntime，即AndroidRuntime，建立了一个Dalvik虚拟机。通过这个runtime传递com.android.internal.os.ZygoteInit参数，从而由Dalvik虚拟机运行ZygoteInit.java的main()，开始创建Zygote进程。在其main()中，如下所示：
+
+ 	    registerZygoteSocket();
+            EventLog.writeEvent(LOG_BOOT_PROGRESS_PRELOAD_START,
+                SystemClock.uptimeMillis());
+            preloadClasses();
+            //cacheRegisterMaps();
+            preloadResources();
+            EventLog.writeEvent(LOG_BOOT_PROGRESS_PRELOAD_END,
+                SystemClock.uptimeMillis());
+
+            // Finish profiling the zygote initialization.
+            SamplingProfilerIntegration.writeZygoteSnapshot();
+
+            // Do an initial gc to clean up after startup
+            gc();
+
+            // If requested, start system server directly from Zygote
+            if (argv.length != 2) {
+                throw new RuntimeException(argv[0] + USAGE_STRING);
+            }
+
+            if (argv[1].equals("true")) {
+                startSystemServer();
+            } else if (!argv[1].equals("false")) {
+                throw new RuntimeException(argv[0] + USAGE_STRING);
+            }
+
+
+
+首先通过registerZygoteSocket()登记端口，接着preloadClasses()装载相关类。这里大概要装载1000多个类，具体装载类见platform\frameworks\base\preloaded-classes。这个文件有WritePreloadedClassFile类自动生成。分析该类的main函数，有如下一段筛选类的代码：
+
+        // Preload classes that were loaded by at least 2 processes. Hopefully,
+        // the memory associated with these classes will be shared.
+        for (LoadedClass loadedClass : root.loadedClasses.values()) {
+            Set<String> names = loadedClass.processNames();
+            if (!Policy.isPreloadable(loadedClass)) {
+                continue;
+            }
+
+            if (names.size() >= MIN_PROCESSES ||
+                    (loadedClass.medianTimeMicros() > MIN_LOAD_TIME_MICROS && names.size() > 1)) {
+                toPreload.add(loadedClass);
+            }
+        }
+
+        int initialSize = toPreload.size();
+        System.out.println(initialSize
+                + " classses were loaded by more than one app.");
+
+        // Preload eligable classes from applications (not long-running
+        // services).
+        for (Proc proc : root.processes.values()) {
+            if (proc.fromZygote() && !Policy.isService(proc.name)) {
+                for (Operation operation : proc.operations) {
+                    LoadedClass loadedClass = operation.loadedClass;
+                    if (shouldPreload(loadedClass)) {
+                        toPreload.add(loadedClass);
+                    }
+                }
+            }
+        }
+
+
+其中MIN_LOAD_TIME_MICROS等于1250，当类的装载时间大于1.25ms，则需要预装载。
+Policy.isPreloadable()定于如下：
+    /**Reports if the given class should be preloaded. */
+    public static boolean isPreloadable(LoadedClass clazz) {
+        return clazz.systemClass && !EXCLUDED_CLASSES.contains(clazz.name);
+    }
+
+其中EXCLUDED_CLASSES如下定义：
+
+    /**
+     * Classes which we shouldn't load from the Zygote.
+     */
+    private static final Set<String> EXCLUDED_CLASSES
+            = new HashSet<String>(Arrays.asList(
+        // Binders
+        "android.app.AlarmManager",
+        "android.app.SearchManager",
+        "android.os.FileObserver",
+        "com.android.server.PackageManagerService$AppDirObserver",
+
+        // Threads
+        "android.os.AsyncTask",
+        "android.pim.ContactsAsyncHelper",
+        "java.lang.ProcessManager"
+    ));
+
+
+这几个Binders和Thread是不会被预加载的。
+    另外还有一些application需要装载，要求满足条件proc.fromZygote()且不是属于常驻内存的服务。SERVICES定义如下：
+
+   /**
+     * Long running services. These are restricted in their contribution to the 
+     * preloader because their launch time is less critical.
+     */
+    // TODO: Generate this automatically from package manager.
+    private static final Set<String> SERVICES = new HashSet<String>(Arrays.asList(
+        "system_server",
+        "com.google.process.content",
+        "android.process.media",
+        "com.android.bluetooth",
+        "com.android.calendar",
+        "com.android.inputmethod.latin",
+        "com.android.phone",
+        "com.google.android.apps.maps.FriendService", // pre froyo
+        "com.google.android.apps.maps:FriendService", // froyo
+        "com.google.android.apps.maps.LocationFriendService",
+        "com.google.android.deskclock",
+        "com.google.process.gapps",
+        "android.tts"
+    ));
+
+
+preloaded-classes是在下载源码的时候生成，WritePreloadedClassFile类并没有被用到，但可以通过这个类了解Android系统对预加载类的默认要求，参考修改preloaded-classes文件，减少开机初始化时要预加载的类，提高开机速度。
+最后来通过startSystemServer()启动SystemServer进程。见如下代码：
+
+        /* Hardcoded command line to start the system server */
+        String args[] = {
+            "--setuid=1000",
+            "--setgid=1000",
+            "--setgroups=1001,1002,1003,1004,1005,1006,1007,1008,1009,1010,1018,3001,3002,3003",
+            "--capabilities=130104352,130104352",
+            "--runtime-init",
+            "--nice-name=system_server",
+            "com.android.server.SystemServer",
+        };
+        ZygoteConnection.Arguments parsedArgs = null;
+
+        int pid;
+
+        try {
+            parsedArgs = new ZygoteConnection.Arguments(args);
+
+            /*
+             * Enable debugging of the system process if *either* the command line flags
+             * indicate it should be debuggable or the ro.debuggable system property
+             * is set to "1"
+             */
+            int debugFlags = parsedArgs.debugFlags;
+            if ("1".equals(SystemProperties.get("ro.debuggable")))
+                debugFlags |= Zygote.DEBUG_ENABLE_DEBUGGER;
+
+            /* Request to fork the system server process */
+            pid = Zygote.forkSystemServer(
+                    parsedArgs.uid, parsedArgs.gid,
+                    parsedArgs.gids, debugFlags, null,
+                    parsedArgs.permittedCapabilities,
+                    parsedArgs.effectiveCapabilities)
+
+  Zygote包装了Linux的fork。forkSystemServer()调用forkAndSpecialize()，最终穿过虚拟机调用platform\dalvik\vm\native\dalvik_system_Zygote.c中Dalvik_dalvik_system_Zygote_forkAndSpecialize()。由dalvik完成fork新的进程。
+       main()最后会调用runSelectLoopMode()，进入while循环，由peers创建新的进程。
+
+------------------
+SystemService进程
+------------------
+
+SystemService用于创建init.rc定义的服务之外的所有服务。在main()的最后有如下代码：
+        // The system server has to run all of the time, so it needs to be
+        // as efficient as possible with its memory usage.
+        VMRuntime.getRuntime().setTargetHeapUtilization(0.8f);
+        
+        System.loadLibrary("android_servers");
+        init1(args);
+
+Init1()是在native空间实现的，用于启动native空间的服务，其实现在com_android_server_SystemServer.cpp中的android_server_SystemServer_init1()：
+
+        static void android_server_SystemServer_init1(JNIEnv* env, jobject clazz)
+        {
+    		system_init();
+	}
+
+而system_init()服务初始化创建native层的各个服务：
+
+    	// Start the sensor service
+     	SensorService::instantiate();
+
+    	// On the simulator, audioflinger et al don't get started the
+    	// same way as on the device, and we need to start them here
+    	if (!proc->supportsProcesses()) {
+
+        // Start the AudioFlinger
+        AudioFlinger::instantiate();
+
+        // Start the media playback service
+        MediaPlayerService::instantiate();
+
+        // Start the camera service
+        CameraService::instantiate();
+
+        // Start the audio policy service
+        AudioPolicyService::instantiate();
+    	}
+
+最后通过如下代码:
+        LOGI("System server: starting Android services.\n");
+        runtime->callStatic("com/android/server/SystemServer", "init2");
+回到SystemServer.java，调用init2()：
+        public static final void init2() {
+        Slog.i(TAG, "Entered the Android system server!");
+        Thread thr = new ServerThread();
+        thr.setName("android.server.ServerThread");
+        thr.start();
+        }
+
+Init2启动一个线程，专门用来启动java空间的所有服务。如下代码所示启动部分服务：
+        Slog.i(TAG, "Content Manager");
+        ContentService.main(context,
+             factoryTest == SystemServer.FACTORY_TEST_LOW_LEVEL);
+
+        Slog.i(TAG, "System Content Providers");
+        ActivityManagerService.installSystemProviders();
+
+        Slog.i(TAG, "Battery Service");
+        battery = new BatteryService(context);
+        ServiceManager.addService("battery", battery);
+
+        Slog.i(TAG, "Lights Service");
+        lights = new LightsService(context);
+
+        Slog.i(TAG, "Vibrator Service");
+        ServiceManager.addService("vibrator", new VibratorService(context));
+
+        // only initialize the power service after we have started the
+        // lights service, content providers and the battery service.
+        power.init(context, lights, ActivityManagerService.getDefault(), battery);
+
+        Slog.i(TAG, "Alarm Manager");
+        AlarmManagerService alarm = new AlarmManagerService(context);
+        ServiceManager.addService(Context.ALARM_SERVICE, alarm);
+
+并且把这些服务添加到ServiceManager中，以便管理和进程间通讯。
+在该线程后半部分，ActivityManagerService会等待AppWidget、WallPaper、IMM等systemReady后调用自身的systemReady()。
+        ((ActivityManagerService)ServiceManager.getService("activity"))
+                 .setWindowManager(wm);
+
+         // Skip Bluetooth if we have an emulator kernel
+         // TODO: Use a more reliable check to see if this product should
+         // support Bluetooth - see bug 988521
+         if (SystemProperties.get("ro.kernel.qemu").equals("1")) {
+              Slog.i(TAG, "Registering null Bluetooth Service (emulator)");
+              ServiceManager.addService(BluetoothAdapter.BLUETOOTH_SERVICE, null);
+         } else if (factoryTest == SystemServer.FACTORY_TEST_LOW_LEVEL) {
+              Slog.i(TAG, "Registering null Bluetooth Service (factory test)");
+              ServiceManager.addService(BluetoothAdapter.BLUETOOTH_SERVICE, null);
+         } else {
+              Slog.i(TAG, "Bluetooth Service");
+              bluetooth = new BluetoothService(context);
+              ServiceManager.addService(BluetoothAdapter.BLUETOOTH_SERVICE, bluetooth);
+              bluetooth.initAfterRegistration();
+              bluetoothA2dp = new BluetoothA2dpService(context, bluetooth);
+              ServiceManager.addService(BluetoothA2dpService.BLUETOOTH_A2DP_SERVICE,
+                            bluetoothA2dp);
+
+              int bluetoothOn = Settings.Secure.getInt(mContentResolver,
+              Settings.Secure.BLUETOOTH_ON, 0);
+              if (bluetoothOn > 0) {
+                  bluetooth.enable();
+          }
+          }
+    
+而在ActivityManagerService的systemReady()最后会执行如下代码：
+        mMainStack.resumeTopActivityLocked(null);
+由于Activity管理栈为空，因此启动Launcher。
+        // Find the first activity that is not finishing.
+        ActivityRecord next = topRunningActivityLocked(null);
+
+        // Remember how we'll process this pause/resume situation, and ensure
+        // that the state is reset however we wind up proceeding.
+        final boolean userLeaving = mUserLeaving;
+        mUserLeaving = false;
+
+        if (next == null) {
+            // There are no more activities!  Let's just start up the
+            // Launcher...
+            if (mMainStack) {
+                return mService.startHomeActivityLocked();
+            }
+        }
+
+在startHomeActivityLocked()中创建一个带Category为CATEGORY_HOME的Intent，由此去启动相应Activity，即Launcher。
+        Intent intent = new Intent(
+            mTopAction,
+            mTopData != null ? Uri.parse(mTopData) : null);
+        intent.setComponent(mTopComponent);
+        if (mFactoryTest != SystemServer.FACTORY_TEST_LOW_LEVEL) {
+            intent.addCategory(Intent.CATEGORY_HOME);
+        }
+
+这样，Android系统便启动起来进入到待机界面。
+
+note:http://www.cnblogs.com/zhixingwujiang/articles/2116650.html
+
+
+
+
