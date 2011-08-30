@@ -1,0 +1,27 @@
+(秒定)加快GPS定位之修改gps.conf
+
+直接用超级终端,命令行下修改gps.conf 更为简单灵活的.超级终端root后,刷黑人MOD,系统自带.
+下面给出命令
+1.mount -oremount,rw /dev/block/mtdblock3 /system   //使 /etc目录变成可读写
+2.cd /etc                                           //切换到 etc目录下
+3.chmod 755 gps.conf                                //修改etc 权限为root 可写
+4.vi gps.conf                                       //进入vi 编辑器,编辑gps.conf
+5.输入i字符,到编辑模式
+方案一：
+NTP_SERVER=3.cn.pool.ntp.org
+XTRA_SERVER_1=http://xtra1.gpsonextra.net/xtra.bin
+XTRA_SERVER_2=http://xtra2.gpsonextra.net/xtra.bin
+XTRA_SERVER_3=http://xtra3.gpsonextra.net/xtra.bin
+SUPL_HOST=supl.nokia.com
+SUPL_PORT=7276
+
+方案二：
+NTP_SERVER= 2.asia.pool.ntp.org
+XTRA_SERVER_1=http://xtra1.gpsonextra.net/xtra.bin
+XTRA_SERVER_2=http://xtra2.gpsonextra.net/xtra.bin
+XTRA_SERVER_3=http://xtra3.gpsonextra.net/xtra.bin
+SUPL_HOST=supl.google.com
+SUPL_PORT=7276
+6.修改完毕,按OK后,马上按 1,相当于电脑上的 ESC功能.
+7.输入 :wq                                           //退出
+8.修改完毕.
