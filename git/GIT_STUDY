@@ -12,7 +12,11 @@ Global setup:
 git config --global user.name "Your Name"
 git config --global user.email cn.compous@gmail.com
 
-Create Romote Server:
+Create Server
+cd ./project_name
+git init --bare
+
+Create Romote Client:
 mkdir cn-ninux
 cd cn-ninux
 git init
