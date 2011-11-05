@@ -29,3 +29,13 @@ git push -u origin master
 
 Remove commit
 git reset --hard HEAD^
+
+
+Stash
+
+git stash
+git stash pop
+git reset HEAD ./
+git stash --help
+
+
