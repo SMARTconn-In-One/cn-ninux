@@ -1,0 +1,22 @@
+linux
+1 add user
+  eg. sudo userdadd -m git
+2 del user
+  eg. sudo deluser -r git 
+
+3 set network
+  sudo vi /etc/network/interfaces
+  eg.
+  auto eth0
+  iface eth0 inet static
+  address 192.168.3.90
+  gateway 192.168.3.1
+  netmask 255.255.255.0
+  network 192.168.3.0 
+  broadcast 192.168.3.255
+  save:
+  sudo /etc/init.d/networking restart
+
+4 set ssh server
+  sudo apt-get install openssh-server
+

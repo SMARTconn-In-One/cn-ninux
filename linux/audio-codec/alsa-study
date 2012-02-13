@@ -1,0 +1,81 @@
+1, snd_soc_codec_device
+
+/* codec device */
+struct snd_soc_codec_device {
+	int (*probe)(struct platform_device *pdev);
+	int (*remove)(struct platform_device *pdev);
+	int (*suspend)(struct platform_device *pdev, pm_message_t state);
+	int (*resume)(struct platform_device *pdev);
+};
+
+
+2, snd_soc_device
+// ####  soc.h  ####
+/* SoC Device - the audio subsystem */
+struct snd_soc_device {
+	struct device *dev;
+	struct snd_soc_card *card;
+	struct snd_soc_codec_device *codec_dev;
+	void *codec_data;
+};
+
+3, snd_soc_codec
+// ####  soc.h  ####
+/* SoC Audio Codec */
+struct snd_soc_codec {
+	char *name;
+	struct module *owner;
+	struct mutex mutex;
+	struct device *dev;
+	struct snd_soc_device *socdev;
+
+	struct list_head list;
+
+	/* callbacks */
+	int (*set_bias_level)(struct snd_soc_codec *,
+			      enum snd_soc_bias_level level);
+
+	/* runtime */
+	struct snd_card *card;
+	struct snd_ac97 *ac97;  /* for ad-hoc ac97 devices */
+	unsigned int active;
+	unsigned int pcm_devs;
+	void *drvdata;
+
+	/* codec IO */
+	void *control_data; /* codec control (i2c/3wire) data */
+	unsigned int (*read)(struct snd_soc_codec *, unsigned int);
+	int (*write)(struct snd_soc_codec *, unsigned int, unsigned int);
+	int (*display_register)(struct snd_soc_codec *, char *,
+				size_t, unsigned int);
+	int (*volatile_register)(unsigned int);
+	int (*readable_register)(unsigned int);
+	hw_write_t hw_write;
+	unsigned int (*hw_read)(struct snd_soc_codec *, unsigned int);
+	void *reg_cache;
+	short reg_cache_size;
+	short reg_cache_step;
+
+	unsigned int idle_bias_off:1; /* Use BIAS_OFF instead of STANDBY */
+	unsigned int cache_only:1;  /* Suppress writes to hardware */
+	unsigned int cache_sync:1; /* Cache needs to be synced to hardware */
+
+	/* dapm */
+	u32 pop_time;
+	struct list_head dapm_widgets;
+	struct list_head dapm_paths;
+	enum snd_soc_bias_level bias_level;
+	enum snd_soc_bias_level suspend_bias_level;
+	struct delayed_work delayed_work;
+
+	/* codec DAI's */
+	struct snd_soc_dai *dai;
+	unsigned int num_dai;
+
+#ifdef CONFIG_DEBUG_FS
+	struct dentry *debugfs_codec_root;
+	struct dentry *debugfs_reg;
+	struct dentry *debugfs_pop_time;
+	struct dentry *debugfs_dapm;
+#endif
+};
