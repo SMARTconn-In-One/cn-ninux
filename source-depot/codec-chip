@@ -1,0 +1,34 @@
+1,Application get Root permission
+
+-------------------
+codec sample
+-------------------
+public static boolean runRootCommand(String command) {
+	Process process = null;
+	DataOutPutStream dos = null;
+	try{
+		process =Runtime.getRuntime().exec("su");
+		dos = new DataOutputStream(porcess.getOutputStream());
+		dos.writeBytes(command+"\n");
+		dos.flush();
+		process.waitFor();
+	} catch (Exception e) {
+		Log.d(TAG, "the device is not rooted, error :"+e.getMessage());
+		return flase;
+	} finally {
+		try {
+			if(dos != null) {
+				dos.close();			
+			}
+
+			if(process != null) {
+				process.destory();			
+			}
+		} catch(Exception e) {
+			e.printStackTrace();
+		}	
+	}
+	return true;
+
+
+}
